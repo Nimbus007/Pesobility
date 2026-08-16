@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Peso Pilot — Budget, Bills & Payroll</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0e1116;--card:#171b23;--card2:#1e242f;--line:#2a3140;--txt:#e8ecf3;--mut:#9aa3b2;--acc:#7c6cff;--acc2:#39c6a5;--red:#ff6b6b;--yel:#ffd166}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh}
+.hidden{display:none!important}
+.center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.authcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px;width:100%;max-width:380px}
+.authcard h1{font-size:22px;margin-bottom:4px}
+.authcard p{color:var(--mut);font-size:13px;margin-bottom:16px}
+input,select,textarea{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:10px;outline:none}
+input:focus,select:focus{border-color:var(--acc)}
+.btn{display:inline-block;background:var(--acc);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
+.btn.small{padding:5px 10px;font-size:12.5px;border-radius:8px}
+.btn.green{background:var(--acc2)} .btn.red{background:var(--red)}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(14,17,22,.92);backdrop-filter:blur(8px);z-index:5}
+header .logo{font-weight:800;font-size:18px;background:linear-gradient(90deg,#7c6cff,#39c6a5);-webkit-background-clip:text;background-clip:text;color:transparent}
+header .sp{flex:1}
+header input[type=month]{width:auto;margin:0}
+nav{display:flex;gap:6px;padding:12px 20px;flex-wrap:wrap}
+.tab{padding:8px 14px;border-radius:999px;border:1px solid var(--line);color:var(--mut);cursor:pointer;font-size:13.5px;background:var(--card)}
+.tab.on{background:var(--acc);border-color:var(--acc);color:#fff}
+main{padding:8px 20px 60px;max-width:1150px;margin:0 auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.card h3{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+.big{font-size:22px;font-weight:800}
+.pos{color:var(--acc2)} .neg{color:var(--red)}
+.charts{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:12px;margin-bottom:16px}
+@media(max-width:900px){.charts{grid-template-columns:1fr}}
+.chartbox{height:240px;position:relative}
+.rowhead{display:flex;align-items:center;gap:10px;margin:18px 0 10px;flex-wrap:wrap}
+.rowhead h2{font-size:17px} .rowhead .sp{flex:1}
+.tblwrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}
+th{color:var(--mut);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;text-align:left}
+th,td{padding:11px 14px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:none}
+.pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;background:var(--card2);border:1px solid var(--line)}
+.bar{height:8px;background:var(--card2);border-radius:99px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--acc2)}
+.bar i.over{background:var(--red)}
+.mut{color:var(--mut);font-size:13px}
+dialog{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:16px;padding:22px;width:min(420px,92vw)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h2{font-size:17px;margin-bottom:14px}
+.dlgrow{display:flex;gap:10px} .dlgrow>*{flex:1}
+.dlgbtns{display:flex;gap:10px;justify-content:flex-end;margin-top:6px}
+.empty{padding:26px;text-align:center;color:var(--mut)}
+label{font-size:12px;color:var(--mut);display:block;margin-bottom:3px}
+.budline{margin-bottom:12px}
+.budline .t{display:flex;justify-content:space-between;font-size:13.5px}
+</style>
+</head>
+<body>
+
+<div id="setupNote" class="center hidden">
+  <div class="authcard"><h1>One more step 🔧</h1>
+  <p>Open this file and paste your Firebase web config into the <b>firebaseConfig</b> object at the top of the &lt;script&gt; (Firebase console → Task List → Project settings → Your apps → Web). Then reload.</p></div>
+</div>
+
+<div id="loginView" class="center hidden">
+  <div class="authcard">
+    <h1>Peso Pilot</h1><p>Budget · Bills · Installments · Payroll — synced to your Firebase.</p>
+    <input id="email" type="email" placeholder="Email">
+    <input id="pass" type="password" placeholder="Password">
+    <button class="btn" style="width:100%" onclick="signIn()">Sign in</button>
+    <button class="btn ghost" style="width:100%;margin-top:8px" onclick="signUp()">Create account (first time)</button>
+    <p class="mut" style="margin-top:10px">Tip: after creating your account, you can disable new sign-ups in Firebase → Authentication.</p>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+<header>
+  <span class="logo">Peso Pilot</span>
+  <span class="sp"></span>
+  <input type="month" id="monthPick">
+  <button class="btn small" onclick="openTx()">＋ Transaction</button>
+  <button class="btn ghost small" onclick="auth.signOut()">Sign out</button>
+</header>
+<nav>
+  <div class="tab on" data-t="dash">Dashboard</div>
+  <div class="tab" data-t="tx">Transactions</div>
+  <div class="tab" data-t="bills">Bills</div>
+  <div class="tab" data-t="inst">Installments</div>
+  <div class="tab" data-t="pay">Payroll</div>
+</nav>
+<main>
+
+<section id="v-dash">
+  <div class="grid">
+    <div class="card"><h3>Income (month)</h3><div class="big pos" id="dIn">₱0</div></div>
+    <div class="card"><h3>Spent (month)</h3><div class="big neg" id="dOut">₱0</div></div>
+    <div class="card"><h3>Left in pocket</h3><div class="big" id="dPocket">₱0</div><div class="mut" id="dCut"></div></div>
+    <div class="card"><h3>Unpaid bills</h3><div class="big yel" id="dBills">0</div><div class="mut">this month</div></div>
+  </div>
+  <div class="charts">
+    <div class="card"><h3>Spending — last 6 months</h3><div class="chartbox"><canvas id="cTrend"></canvas></div></div>
+    <div class="card"><h3>By category</h3><div class="chartbox"><canvas id="cCat"></canvas></div></div>
+    <div class="card"><h3>By payment method</h3><div class="chartbox"><canvas id="cMeth"></canvas></div></div>
+  </div>
+  <div class="rowhead"><h2>Category budgets</h2><span class="sp"></span><button class="btn ghost small" onclick="openBudgets()">Set / edit budgets</button></div>
+  <div class="card" id="budgets"><div class="empty">No budgets yet — set limits per category (YNAB style).</div></div>
+</section>
+
+<section id="v-tx" class="hidden">
+  <div class="rowhead"><h2>Transactions</h2><span class="sp"></span>
+    <select id="fCat" style="width:auto;margin:0" onchange="render()"></select>
+    <select id="fMeth" style="width:auto;margin:0" onchange="render()"></select>
+    <button class="btn ghost small" onclick="exportCSV()">Export CSV</button>
+    <button class="btn small" onclick="openTx()">＋ Add</button></div>
+  <div class="tblwrap"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Method</th><th style="text-align:right">Amount</th><th></th></tr></thead><tbody id="txBody"></tbody></table></div>
+</section>
+
+<section id="v-bills" class="hidden">
+  <div class="rowhead"><h2>Bills</h2><span class="sp"></span><button class="btn small" onclick="dlgBill.showModal()">＋ Add bill</button></div>
+  <h3 class="mut" style="margin:6px 0">First Cut-Off (1–15)</h3>
+  <div class="tblwrap" style="margin-bottom:14px"><table><thead><tr><th>Bill</th><th>Due day</th><th>Category</th><th style="text-align:right">Amount</th><th>Status</th><th></th></tr></thead><tbody id="bill1"></tbody></table></div>
+  <h3 class="mut" style="margin:6px 0">Second Cut-Off (16–31)</h3>
+  <div class="tblwrap"><table><thead><tr><th>Bill</th><th>Due day</th><th>Category</th><th style="text-align:right">Amount</th><th>Status</th><th></th></tr></thead><tbody id="bill2"></tbody></table></div>
+</section>
+
+<section id="v-inst" class="hidden">
+  <div class="rowhead"><h2>Installments & Loans</h2><span class="sp"></span><button class="btn small" onclick="dlgInst.showModal()">＋ Add installment</button></div>
+  <div class="tblwrap"><table><thead><tr><th>Item</th><th style="text-align:right">Monthly</th><th>Months left</th><th>Next payment</th><th style="text-align:right">Remaining</th><th></th></tr></thead><tbody id="instBody"></tbody></table></div>
+</section>
+
+<section id="v-pay" class="hidden">
+  <div class="rowhead"><h2>Payroll</h2><span class="sp"></span><button class="btn small" onclick="openPayDlg()">＋ Add paycheck</button></div>
+  <div class="grid">
+    <div class="card"><h3>Paychecks (month)</h3><div class="big pos" id="pIn">₱0</div></div>
+    <div class="card"><h3>Spent (month)</h3><div class="big neg" id="pOut">₱0</div></div>
+    <div class="card"><h3>To be left from the pocket</h3><div class="big" id="pLeft">₱0</div></div>
+  </div>
+  <div class="tblwrap"><table><thead><tr><th>Date</th><th>Cut-off</th><th style="text-align:right">Amount</th><th>Note</th><th></th></tr></thead><tbody id="payBody"></tbody></table></div>
+</section>
+
+</main>
+
+<dialog id="dlgTx"><h2 id="txTitle">Add transaction</h2>
+  <div class="dlgrow"><div><label>Type</label><select id="txType"><option>Expense</option><option>Income</option></select></div>
+  <div><label>Date</label><input type="date" id="txDate"></div></div>
+  <label>Description</label><input id="txDesc" placeholder="e.g. Jollibee, Netflix">
+  <label>Amount (₱)</label><input type="number" step="0.01" id="txAmt">
+  <div class="dlgrow"><div><label>Category</label><select id="txCat"></select></div>
+  <div><label>Paid with</label><select id="txMeth"></select></div></div>
+  <label>Note (optional)</label><input id="txNote">
+  <input type="hidden" id="txBill"><input type="hidden" id="txInst">
+  <div class="dlgbtns"><button class="btn ghost" onclick="dlgTx.close()">Cancel</button><button class="btn" onclick="saveTx()">Save</button></div>
+</dialog>
+
+<dialog id="dlgBill"><h2>Add bill</h2>
+  <label>Name</label><input id="bName" placeholder="e.g. Condo Rent, Netflix">
+  <div class="dlgrow"><div><label>Amount (₱)</label><input type="number" step="0.01" id="bAmt"></div>
+  <div><label>Due day (1–31)</label><input type="number" min="1" max="31" id="bDay"></div></div>
+  <div class="dlgrow"><div><label>Cut-off</label><select id="bCut"><option value="1">First (1–15)</option><option value="2">Second (16–31)</option></select></div>
+  <div><label>Category</label><select id="bCat"></select></div></div>
+  <div class="dlgbtns"><button class="btn ghost" onclick="dlgBill.close()">Cancel</button><button class="btn" onclick="saveBill()">Save</button></div>
+</dialog>
+
+<dialog id="dlgInst"><h2>Add installment / loan</h2>
+  <label>Name</label><input id="iName" placeholder="e.g. Macbook, Gloan">
+  <div class="dlgrow"><div><label>Monthly (₱)</label><input type="number" step="0.01" id="iAmt"></div>
+  <div><label>Months left</label><input type="number" min="1" id="iMonths"></div></div>
+  <label>Next payment date</label><input type="date" id="iNext">
+  <div class="dlgbtns"><button class="btn ghost" onclick="dlgInst.close()">Cancel</button><button class="btn" onclick="saveInst()">Save</button></div>
+</dialog>
+
+<dialog id="dlgPay"><h2>Add paycheck</h2>
+  <label>Date received</label><input type="date" id="pDate">
+  <label>Amount (₱)</label><input type="number" step="0.01" id="pAmt">
+  <label>Note (optional)</label><input id="pNote">
+  <div class="dlgbtns"><button class="btn ghost" onclick="dlgPay.close()">Cancel</button><button class="btn" onclick="savePay()">Save</button></div>
+</dialog>
+
+<dialog id="dlgBud"><h2>Monthly budgets per category</h2><div id="budForm"></div>
+  <div class="dlgbtns"><button class="btn ghost" onclick="dlgBud.close()">Cancel</button><button class="btn" onclick="saveBudgets()">Save</button></div>
+</dialog>
+</div>
+
+<script>
+/* ============ 1. PASTE YOUR FIREBASE CONFIG HERE ============ */
+const firebaseConfig = {
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "task-list-65591.firebaseapp.com",
+  projectId: "task-list-65591",
+  storageBucket: "task-list-65591.appspot.com",
+  messagingSenderId: "PASTE_SENDER_ID",
+  appId: "PASTE_APP_ID"
+};
+/* ============================================================ */
+
+const CATEGORIES = ["Food","Subscriptions","Bills & Utilities","Rent","Installments","Transport","Health & Gym","Shopping","Family / Nika","Pets","Other","Income"];
+const METHODS = ["Apple Pay","Credit Card","Debit Card","Cash","GCash","Bank Transfer","Auto-debit","Other"];
+const COLORS = ["#7c6cff","#39c6a5","#ffd166","#ff6b6b","#4dabf7","#f783ac","#a9e34b","#ffa94d","#63e6be","#b197fc","#8ce99a","#748ffc"];
+
+let auth, db, txns=[], bills=[], insts=[], pays=[], budgets={}, unsubs=[], charts={};
+const $ = id => document.getElementById(id);
+const fmt = n => "₱" + Number(n||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const monthKey = () => $("monthPick").value;
+const today = () => new Date().toISOString().slice(0,10);
+const sum = a => a.reduce((s,t)=>s+Number(t.amount||0),0);
+const inMonth = (list,mk) => list.filter(t=>(t.date||"").startsWith(mk));
+const day = t => Number((t.date||"").slice(8,10));
+function addMonth(iso){const d=new Date(iso+"T00:00");d.setMonth(d.getMonth()+1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+
+if(firebaseConfig.apiKey.startsWith("PASTE")){ $("setupNote").classList.remove("hidden"); }
+else{
+  firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth(); db = firebase.firestore();
+  auth.onAuthStateChanged(u=>{
+    if(u){ $("loginView").classList.add("hidden"); $("app").classList.remove("hidden"); listen(); }
+    else { $("app").classList.add("hidden"); $("loginView").classList.remove("hidden"); unsubs.forEach(f=>f()); unsubs=[]; }
+  });
+}
+function signIn(){ auth.signInWithEmailAndPassword($("email").value,$("pass").value).catch(e=>alert(e.message)); }
+function signUp(){ auth.createUserWithEmailAndPassword($("email").value,$("pass").value).catch(e=>alert(e.message)); }
+
+function listen(){
+  unsubs.push(db.collection("transactions").orderBy("date","desc").onSnapshot(s=>{txns=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
+  unsubs.push(db.collection("bills").orderBy("dueDay").onSnapshot(s=>{bills=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
+  unsubs.push(db.collection("installments").orderBy("nextPayment").onSnapshot(s=>{insts=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
+  unsubs.push(db.collection("payroll").orderBy("date","desc").onSnapshot(s=>{pays=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
+  unsubs.push(db.collection("settings").doc("budgets").onSnapshot(d=>{budgets=(d.data()&&d.data().limits)||{};render();}));
+}
+
+function render(){
+  if($("app").classList.contains("hidden")) return;
+  renderDash(); renderTx(); renderBills(); renderInsts(); renderPay();
+}
+
+function renderDash(){
+  const mk=monthKey(), tm=inMonth(txns,mk);
+  const exp=tm.filter(t=>t.type!=="Income"), incTx=tm.filter(t=>t.type==="Income");
+  const income=sum(inMonth(pays,mk))+sum(incTx), spent=sum(exp), pocket=income-spent;
+  $("dIn").textContent=fmt(income); $("dOut").textContent=fmt(spent);
+  $("dPocket").textContent=fmt(pocket); $("dPocket").className="big "+(pocket>=0?"pos":"neg");
+  const s1=sum(exp.filter(t=>day(t)<=15)), s2=spent-s1;
+  $("dCut").textContent=`1st cut-off ${fmt(s1)} · 2nd cut-off ${fmt(s2)}`;
+  $("dBills").textContent=bills.filter(b=>!(b.paid&&b.paid[mk])).length;
+
+  const [y,m]=mk.split("-").map(Number), labels=[], data=[];
+  for(let i=5;i>=0;i--){const d=new Date(y,m-1-i,1);const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    labels.push(d.toLocaleString("en",{month:"short"})); data.push(sum(inMonth(txns,k).filter(t=>t.type!=="Income")));}
+  mkChart("cTrend",{type:"bar",data:{labels,datasets:[{data,backgroundColor:"#7c6cff",borderRadius:6}]},options:base(false)});
+
+  const byCat={}, byMeth={};
+  exp.forEach(t=>{byCat[t.category||"Other"]=(byCat[t.category||"Other"]||0)+Number(t.amount||0);
+                  byMeth[t.method||"Other"]=(byMeth[t.method||"Other"]||0)+Number(t.amount||0);});
+  mkChart("cCat",{type:"doughnut",data:{labels:Object.keys(byCat),datasets:[{data:Object.values(byCat),backgroundColor:COLORS,borderWidth:0}]},options:base(true)});
+  mkChart("cMeth",{type:"doughnut",data:{labels:Object.keys(byMeth),datasets:[{data:Object.values(byMeth),backgroundColor:COLORS.slice(3).concat(COLORS),borderWidth:0}]},options:base(true)});
+
+  const keys=Object.keys(budgets).filter(k=>budgets[k]>0);
+  $("budgets").innerHTML = keys.length? keys.map(c=>{
+    const sp=byCat[c]||0, lim=budgets[c], pct=Math.min(100,sp/lim*100);
+    return `<div class="budline"><div class="t"><span>${esc(c)}</span><span class="${sp>lim?'neg':'mut'}">${fmt(sp)} / ${fmt(lim)}</span></div>
+      <div class="bar"><i class="${sp>lim?'over':''}" style="width:${pct}%"></i></div></div>`;
+  }).join("") : `<div class="empty">No budgets yet — set limits per category (YNAB style).</div>`;
+}
+function base(legend){return{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:legend,position:"bottom",labels:{color:"#9aa3b2",boxWidth:12}}},scales:legend?{}:{x:{ticks:{color:"#9aa3b2"},grid:{color:"#2a3140"}},y:{ticks:{color:"#9aa3b2"},grid:{color:"#2a3140"}}}};}
+function mkChart(id,cfg){ if(charts[id])charts[id].destroy(); charts[id]=new Chart($(id),cfg); }
+
+function renderTx(){
+  const mk=monthKey(), fc=$("fCat").value||"All", fm=$("fMeth").value||"All";
+  const rows=inMonth(txns,mk).filter(t=>(fc==="All"||t.category===fc)&&(fm==="All"||t.method===fm));
+  $("txBody").innerHTML = rows.length? rows.map(t=>`<tr>
+    <td class="mut">${t.date}</td><td>${esc(t.desc)}${t.note?` <span class="mut">· ${esc(t.note)}</span>`:""}</td>
+    <td><span class="pill">${esc(t.category)}</span></td><td><span class="pill">${esc(t.method)}</span></td>
+    <td style="text-align:right" class="${t.type==="Income"?"pos":"neg"}">${t.type==="Income"?"+":"−"}${fmt(t.amount)}</td>
+    <td><button class="btn ghost small" onclick="delDoc('transactions','${t.id}')">✕</button></td></tr>`).join("")
+    : `<tr><td colspan="6" class="empty">No transactions this month yet.</td></tr>`;
+}
+
+function renderBills(){
+  const mk=monthKey();
+  const row=b=>{const paid=b.paid&&b.paid[mk];
+    return `<tr><td>${esc(b.name)}</td><td class="mut">Day ${b.dueDay}</td><td><span class="pill">${esc(b.category)}</span></td>
+    <td style="text-align:right">${fmt(b.amount)}</td>
+    <td>${paid?`<button class="btn green small" onclick="unpayBill('${b.id}')">Paid ✓</button>`
+             :`<button class="btn ghost small" onclick="payBill('${b.id}')">Mark paid</button>`}</td>
+    <td><button class="btn ghost small" onclick="delDoc('bills','${b.id}')">✕</button></td></tr>`;};
+  const g1=bills.filter(b=>b.cutoff==1), g2=bills.filter(b=>b.cutoff==2);
+  $("bill1").innerHTML=g1.length?g1.map(row).join(""):`<tr><td colspan="6" class="empty">No first cut-off bills.</td></tr>`;
+  $("bill2").innerHTML=g2.length?g2.map(row).join(""):`<tr><td colspan="6" class="empty">No second cut-off bills.</td></tr>`;
+}
+function payBill(id){const b=bills.find(x=>x.id===id);
+  openTx({desc:b.name,amount:b.amount,category:b.category,billId:id,title:"Pay bill — pick payment method"});}
+function unpayBill(id){db.collection("bills").doc(id).update({["paid."+monthKey()]:firebase.firestore.FieldValue.delete()});}
+
+function renderInsts(){
+  $("instBody").innerHTML = insts.length? insts.map(i=>{
+    const rem=Number(i.monthly)*Number(i.monthsLeft), done=i.monthsLeft<=0;
+    return `<tr><td>${esc(i.name)}</td><td style="text-align:right">${fmt(i.monthly)}</td>
+    <td>${done?`<span class="pill" style="color:var(--acc2)">Done 🎉</span>`:i.monthsLeft+" mo"}</td>
+    <td class="mut">${done?"—":i.nextPayment}</td><td style="text-align:right">${fmt(rem)}</td>
+    <td>${done?"":`<button class="btn small" onclick="payInst('${i.id}')">Record payment</button>`}
+        <button class="btn ghost small" onclick="delDoc('installments','${i.id}')">✕</button></td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty">No installments — add your Gloan, Macbook, etc.</td></tr>`;
+}
+function payInst(id){const i=insts.find(x=>x.id===id);
+  openTx({desc:i.name+" installment",amount:i.monthly,category:"Installments",instId:id,title:"Record installment payment"});}
+
+function renderPay(){
+  const mk=monthKey(), pm=inMonth(pays,mk), tm=inMonth(txns,mk);
+  const income=sum(pm)+sum(tm.filter(t=>t.type==="Income")), spent=sum(tm.filter(t=>t.type!=="Income"));
+  $("pIn").textContent=fmt(income); $("pOut").textContent=fmt(spent);
+  $("pLeft").textContent=fmt(income-spent); $("pLeft").className="big "+(income-spent>=0?"pos":"neg");
+  $("payBody").innerHTML = pm.length? pm.map(p=>`<tr><td class="mut">${p.date}</td>
+    <td><span class="pill">${day(p)<=15?"First":"Second"} cut-off</span></td>
+    <td style="text-align:right" class="pos">${fmt(p.amount)}</td><td class="mut">${esc(p.note||"")}</td>
+    <td><button class="btn ghost small" onclick="delDoc('payroll','${p.id}')">✕</button></td></tr>`).join("")
+    : `<tr><td colspan="5" class="empty">No paychecks logged this month.</td></tr>`;
+}
+
+function openTx(pre={}){ $("txTitle").textContent=pre.title||"Add transaction";
+  $("txType").value="Expense"; $("txDate").value=today(); $("txDesc").value=pre.desc||"";
+  $("txAmt").value=pre.amount||""; $("txCat").value=pre.category||"Food"; $("txMeth").value="Apple Pay";
+  $("txNote").value=""; $("txBill").value=pre.billId||""; $("txInst").value=pre.instId||""; dlgTx.showModal(); }
+function saveTx(){
+  const t={type:$("txType").value,date:$("txDate").value,desc:$("txDesc").value.trim(),
+    amount:Number($("txAmt").value),category:$("txCat").value,method:$("txMeth").value,note:$("txNote").value.trim(),
+    createdAt:Date.now()};
+  if(!t.date||!t.desc||!(t.amount>0)) return alert("Please fill date, description and a valid amount.");
+  db.collection("transactions").add(t).then(()=>{
+    const bid=$("txBill").value, iid=$("txInst").value;
+    if(bid) db.collection("bills").doc(bid).update({["paid."+monthKey()]:true});
+    if(iid){const i=insts.find(x=>x.id===iid);
+      db.collection("installments").doc(iid).update({monthsLeft:Number(i.monthsLeft)-1,nextPayment:addMonth(i.nextPayment)});}
+  });
+  dlgTx.close();
+}
+function saveBill(){
+  const b={name:$("bName").value.trim(),amount:Number($("bAmt").value),dueDay:Number($("bDay").value)||1,
+    cutoff:Number($("bCut").value),category:$("bCat").value,paid:{}};
+  if(!b.name||!(b.amount>0)) return alert("Name and amount please.");
+  db.collection("bills").add(b); dlgBill.close();
+}
+function saveInst(){
+  const i={name:$("iName").value.trim(),monthly:Number($("iAmt").value),monthsLeft:Number($("iMonths").value),
+    nextPayment:$("iNext").value||today()};
+  if(!i.name||!(i.monthly>0)||!(i.monthsLeft>0)) return alert("Fill in name, monthly amount and months left.");
+  db.collection("installments").add(i); dlgInst.close();
+}
+function openPayDlg(){ $("pDate").value=today(); $("pAmt").value=""; $("pNote").value=""; dlgPay.showModal(); }
+function savePay(){
+  const p={date:$("pDate").value,amount:Number($("pAmt").value),note:$("pNote").value.trim()};
+  if(!p.date||!(p.amount>0)) return alert("Date and amount please.");
+  db.collection("payroll").add(p); dlgPay.close();
+}
+function openBudgets(){
+  $("budForm").innerHTML=CATEGORIES.filter(c=>c!=="Income").map(c=>
+    `<label>${esc(c)}</label><input type="number" step="1" data-bud="${esc(c)}" value="${budgets[c]||""}" placeholder="No limit">`).join("");
+  dlgBud.showModal();
+}
+function saveBudgets(){
+  const limits={}; document.querySelectorAll("[data-bud]").forEach(i=>{if(Number(i.value)>0)limits[i.dataset.bud]=Number(i.value);});
+  db.collection("settings").doc("budgets").set({limits}); dlgBud.close();
+}
+function delDoc(col,id){ if(confirm("Delete this entry?")) db.collection(col).doc(id).delete(); }
+function exportCSV(){
+  const mk=monthKey(), rows=[["date","type","description","amount","category","method","note"]];
+  inMonth(txns,mk).forEach(t=>rows.push([t.date,t.type,t.desc,t.amount,t.category,t.method,t.note||""]));
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download=`transactions-${mk}.csv`; a.click();
+}
+
+/* boot */
+$("monthPick").value=new Date().toISOString().slice(0,7);
+$("monthPick").onchange=render;
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on")); t.classList.add("on");
+  ["dash","tx","bills","inst","pay"].forEach(v=>$("v-"+v).classList.toggle("hidden",v!==t.dataset.t));
+  render();
+});
+const fill=(el,list,all)=>{el.innerHTML=(all?["All"]:[]).concat(list).map(o=>`<option>${o}</option>`).join("");};
+fill($("txCat"),CATEGORIES.filter(c=>c!=="Income")); fill($("txMeth"),METHODS);
+fill($("bCat"),CATEGORIES.filter(c=>c!=="Income")); fill($("fCat"),CATEGORIES,true); fill($("fMeth"),METHODS,true);
+</script>
+</body>
+</html>
