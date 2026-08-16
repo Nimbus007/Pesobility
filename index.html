@@ -205,6 +205,7 @@ const METHODS = ["Apple Pay","Credit Card","Debit Card","Cash","GCash","Bank Tra
 const COLORS = ["#7c6cff","#39c6a5","#ffd166","#ff6b6b","#4dabf7","#f783ac","#a9e34b","#ffa94d","#63e6be","#b197fc","#8ce99a","#748ffc"];
 
 let auth, db, txns=[], bills=[], insts=[], pays=[], budgets={}, unsubs=[], charts={};
+function ucol(name){ return db.collection("users").doc(auth.currentUser.uid).collection(name); }
 const $ = id => document.getElementById(id);
 const fmt = n => "₱" + Number(n||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -228,11 +229,11 @@ function signIn(){ auth.signInWithEmailAndPassword($("email").value,$("pass").va
 function signUp(){ auth.createUserWithEmailAndPassword($("email").value,$("pass").value).catch(e=>alert(e.message)); }
 
 function listen(){
-  unsubs.push(db.collection("transactions").orderBy("date","desc").onSnapshot(s=>{txns=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
-  unsubs.push(db.collection("bills").orderBy("dueDay").onSnapshot(s=>{bills=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
-  unsubs.push(db.collection("installments").orderBy("nextPayment").onSnapshot(s=>{insts=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
-  unsubs.push(db.collection("payroll").orderBy("date","desc").onSnapshot(s=>{pays=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
-  unsubs.push(db.collection("settings").doc("budgets").onSnapshot(d=>{budgets=(d.data()&&d.data().limits)||{};render();}));
+  unsubs.push(ucol("transactions").orderBy("date","desc").onSnapshot(s=>{txns=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
+  unsubs.push(ucol("bills").orderBy("dueDay").onSnapshot(s=>{bills=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
+  unsubs.push(ucol("installments").orderBy("nextPayment").onSnapshot(s=>{insts=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
+  unsubs.push(ucol("payroll").orderBy("date","desc").onSnapshot(s=>{pays=s.docs.map(d=>({id:d.id,...d.data()}));render();}));
+  unsubs.push(ucol("settings").doc("budgets").onSnapshot(d=>{budgets=(d.data()&&d.data().limits)||{};render();}));
 }
 
 function render(){
@@ -296,7 +297,7 @@ function renderBills(){
 }
 function payBill(id){const b=bills.find(x=>x.id===id);
   openTx({desc:b.name,amount:b.amount,category:b.category,billId:id,title:"Pay bill — pick payment method"});}
-function unpayBill(id){db.collection("bills").doc(id).update({["paid."+monthKey()]:firebase.firestore.FieldValue.delete()});}
+function unpayBill(id){ucol("bills").doc(id).update({["paid."+monthKey()]:firebase.firestore.FieldValue.delete()});}
 
 function renderInsts(){
   $("instBody").innerHTML = insts.length? insts.map(i=>{
@@ -332,11 +333,11 @@ function saveTx(){
     amount:Number($("txAmt").value),category:$("txCat").value,method:$("txMeth").value,note:$("txNote").value.trim(),
     createdAt:Date.now()};
   if(!t.date||!t.desc||!(t.amount>0)) return alert("Please fill date, description and a valid amount.");
-  db.collection("transactions").add(t).then(()=>{
+  ucol("transactions").add(t).then(()=>{
     const bid=$("txBill").value, iid=$("txInst").value;
-    if(bid) db.collection("bills").doc(bid).update({["paid."+monthKey()]:true});
+    if(bid) ucol("bills").doc(bid).update({["paid."+monthKey()]:true});
     if(iid){const i=insts.find(x=>x.id===iid);
-      db.collection("installments").doc(iid).update({monthsLeft:Number(i.monthsLeft)-1,nextPayment:addMonth(i.nextPayment)});}
+      ucol("installments").doc(iid).update({monthsLeft:Number(i.monthsLeft)-1,nextPayment:addMonth(i.nextPayment)});}
   });
   dlgTx.close();
 }
@@ -344,19 +345,19 @@ function saveBill(){
   const b={name:$("bName").value.trim(),amount:Number($("bAmt").value),dueDay:Number($("bDay").value)||1,
     cutoff:Number($("bCut").value),category:$("bCat").value,paid:{}};
   if(!b.name||!(b.amount>0)) return alert("Name and amount please.");
-  db.collection("bills").add(b); dlgBill.close();
+  ucol("bills").add(b); dlgBill.close();
 }
 function saveInst(){
   const i={name:$("iName").value.trim(),monthly:Number($("iAmt").value),monthsLeft:Number($("iMonths").value),
     nextPayment:$("iNext").value||today()};
   if(!i.name||!(i.monthly>0)||!(i.monthsLeft>0)) return alert("Fill in name, monthly amount and months left.");
-  db.collection("installments").add(i); dlgInst.close();
+  ucol("installments").add(i); dlgInst.close();
 }
 function openPayDlg(){ $("pDate").value=today(); $("pAmt").value=""; $("pNote").value=""; dlgPay.showModal(); }
 function savePay(){
   const p={date:$("pDate").value,amount:Number($("pAmt").value),note:$("pNote").value.trim()};
   if(!p.date||!(p.amount>0)) return alert("Date and amount please.");
-  db.collection("payroll").add(p); dlgPay.close();
+  ucol("payroll").add(p); dlgPay.close();
 }
 function openBudgets(){
   $("budForm").innerHTML=CATEGORIES.filter(c=>c!=="Income").map(c=>
@@ -365,9 +366,9 @@ function openBudgets(){
 }
 function saveBudgets(){
   const limits={}; document.querySelectorAll("[data-bud]").forEach(i=>{if(Number(i.value)>0)limits[i.dataset.bud]=Number(i.value);});
-  db.collection("settings").doc("budgets").set({limits}); dlgBud.close();
+  ucol("settings").doc("budgets").set({limits}); dlgBud.close();
 }
-function delDoc(col,id){ if(confirm("Delete this entry?")) db.collection(col).doc(id).delete(); }
+function delDoc(col,id){ if(confirm("Delete this entry?")) ucol(col).doc(id).delete(); }
 function exportCSV(){
   const mk=monthKey(), rows=[["date","type","description","amount","category","method","note"]];
   inMonth(txns,mk).forEach(t=>rows.push([t.date,t.type,t.desc,t.amount,t.category,t.method,t.note||""]));
